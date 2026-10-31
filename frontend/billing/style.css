@@ -43,6 +43,10 @@ tr:hover td { background: #fafafe; }
 .message { padding: 12px 16px; border-radius: 8px; font-size: 14px; }
 .message.error { background: #fee2e2; color: var(--bad); border: 1px solid #fecaca; }
 .message.success { background: #dcfce7; color: var(--ok); border: 1px solid #bbf7d0; }
-.hidden { display: none; }
+.hidden { display: none !important; }
 #run-result { margin-top: 12px; font-size: 14px; }
 .empty { color: var(--muted); padding: 20px 0; text-align: center; }
+#app { display: grid; gap: 20px; }
+.userbar { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.userbar .small { margin: 0; }
+body[data-role="customer"] .staff-only { display: none !important; }

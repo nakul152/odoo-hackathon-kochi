@@ -10,71 +10,91 @@
   <header>
     <h1>Billing</h1>
     <span>Invoices, payments and overdue accounts</span>
+    <div id="userbar" class="userbar hidden">
+      <span><strong id="user-name"></strong> (<span id="user-role"></span>)</span>
+      <button id="logout" class="small secondary" type="button">Log out</button>
+    </div>
   </header>
 
   <main>
     <div id="message" class="message hidden" role="alert"></div>
 
-    <section class="card">
-      <h2>Billing day</h2>
-      <p class="hint">Creates invoices for every active subscription that is due. Running it twice never bills anyone twice.</p>
-      <form id="run-form" class="row">
-        <label>Billing date (optional)
-          <input type="date" id="run-date">
+    <section class="card hidden" id="login-card">
+      <h2>Log in</h2>
+      <p class="hint">Use your Brightloop account to see your billing.</p>
+      <form id="login-form" class="row">
+        <label>Email
+          <input type="email" id="login-email" required autocomplete="username">
         </label>
-        <button type="submit">Run billing</button>
-      </form>
-      <div id="run-result"></div>
-    </section>
-
-    <section class="card">
-      <nav class="tabs">
-        <button class="tab active" data-view="invoices">All invoices</button>
-        <button class="tab" data-view="outstanding">Outstanding</button>
-        <button class="tab" data-view="overdue">Overdue</button>
-      </nav>
-      <div class="row" id="filter-row">
-        <label>Status
-          <select id="status-filter">
-            <option value="">All</option>
-            <option value="draft">Draft</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="paid">Paid</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+        <label>Password
+          <input type="password" id="login-password" required autocomplete="current-password">
         </label>
-      </div>
-      <div id="table-area" class="table-wrap"></div>
-    </section>
-
-    <section class="card" id="payment-card">
-      <h2>Record a payment</h2>
-      <p class="hint">Payments can only be recorded on confirmed invoices, and never for more than the balance.</p>
-      <form id="payment-form" class="row">
-        <label>Invoice ID
-          <input type="number" id="pay-invoice" min="1" required>
-        </label>
-        <label>Method
-          <select id="pay-method" required>
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="upi">UPI</option>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="cheque">Cheque</option>
-          </select>
-        </label>
-        <label>Amount
-          <input type="number" id="pay-amount" min="0.01" step="0.01" required>
-        </label>
-        <label>Date (optional)
-          <input type="date" id="pay-date">
-        </label>
-        <label>Note
-          <input type="text" id="pay-note" maxlength="500" placeholder="optional">
-        </label>
-        <button type="submit">Save payment</button>
+        <button type="submit">Log in</button>
       </form>
     </section>
+
+    <div id="app" class="hidden">
+      <section class="card staff-only">
+        <h2>Billing day</h2>
+        <p class="hint">Creates invoices for every active subscription that is due. Running it twice never bills anyone twice.</p>
+        <form id="run-form" class="row">
+          <label>Billing date (optional)
+            <input type="date" id="run-date">
+          </label>
+          <button type="submit">Run billing</button>
+        </form>
+        <div id="run-result"></div>
+      </section>
+
+      <section class="card">
+        <nav class="tabs">
+          <button class="tab active" data-view="invoices">Invoices</button>
+          <button class="tab staff-only" data-view="outstanding">Outstanding</button>
+          <button class="tab staff-only" data-view="overdue">Overdue</button>
+        </nav>
+        <div class="row" id="filter-row">
+          <label>Status
+            <select id="status-filter">
+              <option value="">All</option>
+              <option value="draft">Draft</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="paid">Paid</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+        </div>
+        <div id="table-area" class="table-wrap"></div>
+      </section>
+
+      <section class="card staff-only" id="payment-card">
+        <h2>Record a payment</h2>
+        <p class="hint">Payments can only be recorded on confirmed invoices, and never for more than the balance.</p>
+        <form id="payment-form" class="row">
+          <label>Invoice ID
+            <input type="number" id="pay-invoice" min="1" required>
+          </label>
+          <label>Method
+            <select id="pay-method" required>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="upi">UPI</option>
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="cheque">Cheque</option>
+            </select>
+          </label>
+          <label>Amount
+            <input type="number" id="pay-amount" min="0.01" step="0.01" required>
+          </label>
+          <label>Date (optional)
+            <input type="date" id="pay-date">
+          </label>
+          <label>Note
+            <input type="text" id="pay-note" maxlength="500" placeholder="optional">
+          </label>
+          <button type="submit">Save payment</button>
+        </form>
+      </section>
+    </div>
   </main>
 
   <script src="/billing/ui/app.js"></script>

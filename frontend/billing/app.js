@@ -8,6 +8,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
 const money = (n) => Number(n).toLocaleString("en-IN",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const $ = (id) => document.getElementById(id);
+const getToken = () => localStorage.getItem("token") || localStorage.getItem("access_token");
 
 function showMessage(text, kind = "error") {
   const box = $("message");
@@ -21,25 +22,67 @@ function showMessage(text, kind = "error") {
 function errorText(data, status) {
   if (data && typeof data.detail === "string") return data.detail;
   if (data && Array.isArray(data.detail)) {
-    return data.detail.map((d) => `${(d.loc || []).slice(1).join(" ")}: ${d.msg}`).join("; ");
+    return data.detail.map((d) => typeof d === "string"
+      ? d : `${(d.loc || []).slice(1).join(" ")}: ${d.msg}`).join("; ");
   }
   return `Something went wrong (code ${status})`;
 }
 
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
-  const token = localStorage.getItem("token");   // used once login protection is added
+  const token = getToken();
   if (token) headers["Authorization"] = "Bearer " + token;
+  const url = path.startsWith("/auth") ? path : API + path;
   let res;
   try {
-    res = await fetch(API + path, { ...options, headers });
+    res = await fetch(url, { ...options, headers });
   } catch {
     throw new Error("Cannot reach the server. Is it running?");
   }
   let data = null;
   try { data = await res.json(); } catch { /* empty reply */ }
-  if (!res.ok) throw new Error(errorText(data, res.status));
+  if (!res.ok) {
+    if (res.status === 401) {          // not logged in, or the session ran out
+      localStorage.removeItem("token");
+      localStorage.removeItem("access_token");
+      showLoggedOut();
+    }
+    const err = new Error(errorText(data, res.status));
+    err.status = res.status;
+    throw err;
+  }
   return data;
+}
+
+// ---------- login state ----------
+function showLoggedOut() {
+  document.body.dataset.role = "";
+  $("app").classList.add("hidden");
+  $("userbar").classList.add("hidden");
+  $("login-card").classList.remove("hidden");
+}
+
+function showLoggedIn(user) {
+  document.body.dataset.role = user.role;
+  $("user-name").textContent = user.name;
+  $("user-role").textContent = user.role;
+  $("userbar").classList.remove("hidden");
+  $("login-card").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  currentView = "invoices";
+  document.querySelectorAll(".tab").forEach((t) =>
+    t.classList.toggle("active", t.dataset.view === "invoices"));
+  loadView();
+}
+
+async function startApp() {
+  if (!getToken()) { showLoggedOut(); return; }
+  try {
+    showLoggedIn(await api("/auth/me"));
+  } catch (err) {
+    showLoggedOut();
+    if (err.status !== 401) showMessage(err.message);
+  }
 }
 
 const badge = (status) => `<span class="badge ${esc(status)}">${esc(status)}</span>`;
@@ -62,10 +105,11 @@ function renderInvoices(rows) {
       <td>${esc(r.number)}</td><td>${esc(r.customer)}</td>
       <td>${esc(r.issue_date)}</td><td>${esc(r.due_date)}</td>
       <td class="num">${money(r.total)}</td><td>${badge(r.status)}</td>
-      <td>${actions}</td></tr>`;
+      <td class="staff-only">${actions}</td></tr>`;
   }).join("");
   return `<table><thead><tr><th>Number</th><th>Customer</th><th>Issued</th><th>Due</th>
-    <th class="num">Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>${body}</tbody></table>`;
+    <th class="num">Total</th><th>Status</th><th class="staff-only">Actions</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
 }
 
 function renderUnpaid(rows) {
@@ -97,7 +141,7 @@ async function loadView() {
     }
   } catch (err) {
     area.innerHTML = "";
-    showMessage(err.message);
+    if (err.status !== 401) showMessage(err.message);
   }
 }
 
@@ -124,6 +168,30 @@ function startPayment(id, balance) {
 // ---------- events ----------
 document.addEventListener("DOMContentLoaded", () => {
   $("pay-date").max = new Date().toISOString().slice(0, 10);
+
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showMessage("");
+    try {
+      const r = await api("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: $("login-email").value.trim(),
+                               password: $("login-password").value }),
+      });
+      localStorage.setItem("token", r.access_token);
+      $("login-password").value = "";
+      startApp();
+    } catch (err) {
+      showMessage(err.message);
+    }
+  });
+
+  $("logout").addEventListener("click", () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("access_token");
+    showMessage("");
+    showLoggedOut();
+  });
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -192,5 +260,5 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  loadView();
+  startApp();
 });

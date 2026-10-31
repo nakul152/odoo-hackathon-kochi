@@ -3,12 +3,15 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.billing.access import own_customer_id
 from backend.database import get_connection
+from backend.security import get_current_user, require_roles
 
 router = APIRouter(tags=["Payments"])
+STAFF_ONLY = [Depends(require_roles("admin", "staff"))]
 
 
 class PaymentIn(BaseModel):
@@ -19,7 +22,8 @@ class PaymentIn(BaseModel):
 
 
 @router.post("/invoices/{invoice_id}/payments", status_code=201)
-def record_payment(invoice_id: int, data: PaymentIn):
+def record_payment(invoice_id: int, data: PaymentIn,
+                   user=Depends(require_roles("admin", "staff"))):
     """Record a payment. When the invoice is fully paid it becomes 'paid'."""
     pay_date = data.payment_date or date.today()
     if pay_date > date.today():
@@ -49,10 +53,12 @@ def record_payment(invoice_id: int, data: PaymentIn):
                          f"balance of {balance}")
 
             payment = conn.execute(
-                """INSERT INTO payments (invoice_id, method, amount, payment_date, note)
-                   VALUES (%s, %s, %s, %s, %s)
+                """INSERT INTO payments (invoice_id, method, amount, payment_date,
+                                         note, recorded_by)
+                   VALUES (%s, %s, %s, %s, %s, %s)
                    RETURNING id, method, amount, payment_date, note""",
-                (invoice_id, data.method, data.amount, pay_date, data.note)).fetchone()
+                (invoice_id, data.method, data.amount, pay_date, data.note,
+                 user["id"])).fetchone()
 
             new_balance = balance - data.amount
             status = invoice["status"]
@@ -66,12 +72,14 @@ def record_payment(invoice_id: int, data: PaymentIn):
 
 
 @router.get("/invoices/{invoice_id}/payments")
-def list_payments(invoice_id: int):
+def list_payments(invoice_id: int, user=Depends(get_current_user)):
     with get_connection() as conn:
+        own = own_customer_id(conn, user)
         invoice = conn.execute(
-            "SELECT id, number, status, total FROM invoices WHERE id = %s",
+            "SELECT id, number, status, total, customer_id FROM invoices WHERE id = %s",
             (invoice_id,)).fetchone()
-        if invoice is None:
+        # A customer asking for someone else's invoice gets "not found".
+        if invoice is None or (own is not None and invoice["customer_id"] != own):
             raise HTTPException(404, "Invoice not found")
         payments = conn.execute(
             "SELECT id, method, amount, payment_date, note FROM payments "
@@ -96,7 +104,7 @@ UNPAID_SQL = """
 """
 
 
-@router.get("/outstanding")
+@router.get("/outstanding", dependencies=STAFF_ONLY)
 def outstanding_invoices(limit: int = Query(50, ge=1, le=200),
                          offset: int = Query(0, ge=0)):
     """Confirmed invoices that are not fully paid yet."""
@@ -104,7 +112,7 @@ def outstanding_invoices(limit: int = Query(50, ge=1, le=200),
         return conn.execute(UNPAID_SQL.format(extra=""), (limit, offset)).fetchall()
 
 
-@router.get("/overdue")
+@router.get("/overdue", dependencies=STAFF_ONLY)
 def overdue_invoices(limit: int = Query(50, ge=1, le=200),
                      offset: int = Query(0, ge=0)):
     """Unpaid invoices whose due date has passed, so they can be chased."""

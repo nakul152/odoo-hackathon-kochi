@@ -3,12 +3,15 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.database import get_connection
+from backend.security import require_roles
 
 router = APIRouter(tags=["Taxes & Discounts"])
+ADMIN_ONLY = [Depends(require_roles("admin"))]
+STAFF_OK = [Depends(require_roles("admin", "staff"))]
 
 
 # ===================== TAXES =====================
@@ -18,7 +21,7 @@ class TaxIn(BaseModel):
     rate: Decimal = Field(ge=0, le=100, max_digits=5, decimal_places=2)
 
 
-@router.post("/taxes", status_code=201)
+@router.post("/taxes", status_code=201, dependencies=ADMIN_ONLY)
 def create_tax(data: TaxIn):
     with get_connection() as conn:
         exists = conn.execute(
@@ -31,14 +34,14 @@ def create_tax(data: TaxIn):
             (data.name, data.rate)).fetchone()
 
 
-@router.get("/taxes")
+@router.get("/taxes", dependencies=STAFF_OK)
 def list_taxes(include_inactive: bool = False):
     where = "" if include_inactive else "WHERE is_active"
     with get_connection() as conn:
         return conn.execute(f"SELECT * FROM taxes {where} ORDER BY id").fetchall()
 
 
-@router.put("/taxes/{tax_id}")
+@router.put("/taxes/{tax_id}", dependencies=ADMIN_ONLY)
 def update_tax(tax_id: int, data: TaxIn):
     with get_connection() as conn:
         row = conn.execute(
@@ -49,7 +52,7 @@ def update_tax(tax_id: int, data: TaxIn):
     return row
 
 
-@router.delete("/taxes/{tax_id}")
+@router.delete("/taxes/{tax_id}", dependencies=ADMIN_ONLY)
 def deactivate_tax(tax_id: int):
     """Taxes are switched off, not deleted, because old invoices still use them."""
     with get_connection() as conn:
@@ -99,8 +102,7 @@ def check_targets(conn, data: DiscountIn):
 COLUMNS = ("name, type, value, min_purchase, min_quantity, start_date, end_date, "
            "usage_limit, product_id, subscription_id")
 
-
-@router.post("/discounts", status_code=201)
+@router.post("/discounts", status_code=201, dependencies=ADMIN_ONLY)
 def create_discount(data: DiscountIn):
     with get_connection() as conn:
         check_targets(conn, data)
@@ -112,7 +114,7 @@ def create_discount(data: DiscountIn):
              data.subscription_id)).fetchone()
 
 
-@router.get("/discounts")
+@router.get("/discounts", dependencies=STAFF_OK)
 def list_discounts(active_only: bool = False,
                    limit: int = Query(50, ge=1, le=200),
                    offset: int = Query(0, ge=0)):
@@ -126,7 +128,7 @@ def list_discounts(active_only: bool = False,
             "ORDER BY d.id DESC LIMIT %s OFFSET %s", (limit, offset)).fetchall()
 
 
-@router.put("/discounts/{discount_id}")
+@router.delete("/discounts/{discount_id}", dependencies=ADMIN_ONLY)
 def update_discount(discount_id: int, data: DiscountIn):
     with get_connection() as conn:
         current = conn.execute("SELECT times_used FROM discounts WHERE id = %s",
@@ -147,7 +149,7 @@ def update_discount(discount_id: int, data: DiscountIn):
              data.subscription_id, discount_id)).fetchone()
 
 
-@router.delete("/discounts/{discount_id}")
+@router.delete("/discounts/{discount_id}", dependencies=ADMIN_ONLY)
 def delete_discount(discount_id: int):
     with get_connection() as conn:
         if not conn.execute("SELECT 1 FROM discounts WHERE id = %s",
