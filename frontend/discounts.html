@@ -2,206 +2,170 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Discounts</title>
+  <title>Discounts & Taxes | Brightloop</title>
   <link rel="stylesheet" href="/static/css/style.css">
-  <style>
-    .dsc-bar { background:#4f46e5; padding:12px 24px; display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
-    .dsc-bar a { color:#fff; text-decoration:none; font-size:14px; }
-    .dsc-bar a.on { font-weight:700; text-decoration:underline; }
-    .dsc-bar .sp { margin-left:auto; }
-    .dsc-main { max-width:1050px; margin:24px auto; padding:0 16px; display:grid; gap:20px; font-family:"Segoe UI",system-ui,sans-serif; }
-    .dsc-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:20px; }
-    .dsc-card h2 { margin:0 0 12px; font-size:18px; }
-    .dsc-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; }
-    .dsc-row label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:#6b7280; }
-    .dsc-row input, .dsc-row select { padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; min-width:140px; }
-    .dsc-btn { background:#4f46e5; color:#fff; border:0; border-radius:6px; padding:9px 16px; font-size:14px; cursor:pointer; }
-    .dsc-btn.del { background:#fff; color:#b91c1c; border:1px solid #b91c1c; padding:4px 10px; font-size:12px; }
-    .dsc-wrap { overflow-x:auto; }
-    .dsc-table { width:100%; border-collapse:collapse; font-size:14px; }
-    .dsc-table th, .dsc-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb; white-space:nowrap; }
-    .dsc-table th { color:#6b7280; font-size:12px; text-transform:uppercase; }
-    .dsc-badge { padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; }
-    .dsc-on { background:#dcfce7; color:#15803d; } .dsc-off { background:#f3f4f6; color:#4b5563; }
-    .dsc-msg { padding:12px 16px; border-radius:8px; font-size:14px; display:none; }
-    .dsc-msg.error { display:block; background:#fee2e2; color:#b91c1c; }
-    .dsc-msg.success { display:block; background:#dcfce7; color:#15803d; }
-    .dsc-hint { color:#6b7280; font-size:13px; margin:0 0 12px; }
-  </style>
+  <link rel="stylesheet" href="/static/css/billing.css">
 </head>
 <body>
-  <nav class="dsc-bar">
-    <a href="/static/dashboard.html">Dashboard</a>
-    <a href="/static/invoices.html">Invoices</a>
-    <a href="/static/payments.html">Payments</a>
-    <a href="/static/discounts.html" class="on">Discounts</a>
-    <a href="#" id="logout" class="sp">Log out</a>
-  </nav>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">Discounts &amp; Taxes</h1>
+  <p class="page-sub">Set the rules once. Discounts and taxes then apply to invoices by themselves.</p>
+  <div id="msg" class="msg"></div>
 
-  <main class="dsc-main">
-    <div id="msg" class="dsc-msg" role="alert"></div>
+  <div class="card">
+    <h2>Taxes</h2>
+    <form id="tax-form" class="form-row">
+      <div><label for="t-name">Name</label><input id="t-name" maxlength="50" placeholder="e.g. GST 18%" required></div>
+      <div><label for="t-rate">Rate (%)</label><input id="t-rate" type="number" min="0" max="100" step="0.01" required></div>
+      <button class="btn" type="submit">Add tax</button>
+    </form>
+    <div class="table-scroll" id="taxes" style="margin-top:14px"></div>
+  </div>
 
-    <section class="dsc-card" id="form-card">
-      <h2>New discount</h2>
-      <p class="dsc-hint">A discount applies on the next invoice by itself, and stops when it expires or runs out. Choose a product or a whole subscription.</p>
-      <form id="dsc-form" class="dsc-row">
-        <label>Name <input id="d-name" maxlength="100" required></label>
-        <label>Type
-          <select id="d-type"><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select>
-        </label>
-        <label>Value <input id="d-value" type="number" min="0.01" step="0.01" required></label>
-        <label>Min purchase <input id="d-minp" type="number" min="0" step="0.01" placeholder="0"></label>
-        <label>Min quantity <input id="d-minq" type="number" min="0" step="1" placeholder="0"></label>
-        <label>Start date <input id="d-start" type="date" required></label>
-        <label>End date <input id="d-end" type="date"></label>
-        <label>Usage limit <input id="d-limit" type="number" min="1" step="1" placeholder="unlimited"></label>
-        <label>Applies to
-          <select id="d-target"><option value="product">A product</option><option value="subscription">A subscription</option></select>
-        </label>
-        <label>Product / subscription ID <input id="d-target-id" type="number" min="1" step="1" required></label>
-        <button class="dsc-btn" type="submit">Create discount</button>
-      </form>
-    </section>
+  <div class="card">
+    <h2>New discount</h2>
+    <p class="hint">Applies to the next invoice automatically and stops when it expires or runs out. Choose a product or a whole subscription.</p>
+    <form id="dsc-form" class="form-row">
+      <div><label for="d-name">Name</label><input id="d-name" maxlength="100" required></div>
+      <div><label for="d-type">Type</label>
+        <select id="d-type"><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select></div>
+      <div><label for="d-value">Value</label><input id="d-value" type="number" min="0.01" step="0.01" required></div>
+      <div><label for="d-minp">Min purchase</label><input id="d-minp" type="number" min="0" step="0.01" placeholder="0"></div>
+      <div><label for="d-minq">Min quantity</label><input id="d-minq" type="number" min="0" step="1" placeholder="0"></div>
+      <div><label for="d-start">Start date</label><input id="d-start" type="date" required></div>
+      <div><label for="d-end">End date</label><input id="d-end" type="date"></div>
+      <div><label for="d-limit">Usage limit</label><input id="d-limit" type="number" min="1" step="1" placeholder="unlimited"></div>
+      <div><label for="d-target">Applies to</label>
+        <select id="d-target"><option value="product">A product</option><option value="subscription">A subscription</option></select></div>
+      <div><label for="d-target-id">Product / subscription ID</label><input id="d-target-id" type="number" min="1" step="1" required></div>
+      <button class="btn" type="submit">Create discount</button>
+    </form>
+  </div>
 
-    <section class="dsc-card">
-      <h2>All discounts</h2>
-      <div class="dsc-wrap" id="list"></div>
-    </section>
-  </main>
+  <div class="card">
+    <h2>All discounts</h2>
+    <div class="table-scroll" id="list"></div>
+  </div>
+</main>
 
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script src="/static/js/billing-common.js"></script>
 <script>
+initLayout("discounts.html");
+const user = getUser();
+if (user && user.role !== "admin") window.location.href = "/static/dashboard.html";
+
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const money = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const msg = $("msg");
 
-const token = localStorage.getItem("token") || localStorage.getItem("access_token");
-let user = null;
-try { user = JSON.parse(localStorage.getItem("user")); } catch { /* ignore */ }
-if (!token) location.replace("/static/login.html");
-else if (user && user.role === "customer") location.replace("/static/portal.html");
-const isAdmin = !!user && user.role === "admin";
-
-function say(text, kind = "error") {
-  const box = $("msg");
-  box.textContent = text || "";
-  box.className = "dsc-msg" + (text ? " " + kind : "");
-  if (text) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-function errorText(data, status) {
-  if (data && typeof data.detail === "string") return data.detail;
-  if (data && Array.isArray(data.detail)) {
-    return data.detail.map((d) => typeof d === "string"
-      ? d : `${(d.loc || []).slice(1).join(" ")}: ${d.msg}`).join("; ");
-  }
-  return `Something went wrong (code ${status})`;
-}
-
-async function call(path, method = "GET", body) {
-  let res;
+// ---------- taxes ----------
+async function loadTaxes() {
   try {
-    res = await fetch(path, {
-      method,
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch { throw new Error("Cannot reach the server. Is it running?"); }
-  let data = null;
-  try { data = await res.json(); } catch { /* empty reply */ }
-  if (res.status === 401) {
-    localStorage.removeItem("token");
-    location.replace("/static/login.html");
-    throw new Error("Please log in again");
-  }
-  if (!res.ok) throw new Error(errorText(data, res.status));
-  return data;
+    const rows = await api("/billing/taxes");
+    $("taxes").innerHTML = rows.length
+      ? `<table><thead><tr><th>Name</th><th class="num">Rate</th><th></th></tr></thead><tbody>` +
+        rows.map((t) => `<tr><td>${esc(t.name)}</td><td class="num">${Number(t.rate)}%</td>
+          <td><button class="btn danger small" data-tax="${Number(t.id)}">Switch off</button></td></tr>`).join("") +
+        "</tbody></table>"
+      : '<p class="empty">No taxes yet.</p>';
+  } catch (err) { sayError(msg, err); }
 }
 
-function render(rows) {
-  if (!rows.length) return '<p class="dsc-hint">No discounts yet.</p>';
+$("tax-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearMsg(msg);
+  const name = $("t-name").value.trim();
+  const rate = Number($("t-rate").value);
+  if (!name) return say(msg, "Enter a name for the tax.", "error");
+  if (!(rate >= 0 && rate <= 100)) return say(msg, "The rate must be between 0 and 100.", "error");
+  try {
+    await api("/billing/taxes", "POST", { name, rate });
+    say(msg, "Tax added.");
+    e.target.reset();
+    loadTaxes();
+  } catch (err) { sayError(msg, err); }
+});
+
+$("taxes").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-tax]");
+  if (!b || !confirm("Switch off this tax? Old invoices keep it.")) return;
+  clearMsg(msg);
+  try { await api("/billing/taxes/" + b.dataset.tax, "DELETE"); say(msg, "Tax switched off."); loadTaxes(); }
+  catch (err) { sayError(msg, err); }
+});
+
+// ---------- discounts ----------
+function renderDiscounts(rows) {
+  if (!rows.length) return '<p class="empty">No discounts yet.</p>';
   const body = rows.map((d) => {
     const value = d.type === "percent" ? `${Number(d.value)}%` : money(d.value);
-    const target = d.product_id ? `Product #${d.product_id}` : `Subscription #${d.subscription_id}`;
-    return `<tr>
-      <td>${esc(d.name)}</td><td>${esc(value)}</td><td>${esc(target)}</td>
-      <td>${money(d.min_purchase)} / ${d.min_quantity}</td>
+    const target = d.product_id ? `Product #${Number(d.product_id)}` : `Subscription #${Number(d.subscription_id)}`;
+    const state = d.is_active_now ? '<span class="badge active">Active</span>' : '<span class="badge draft">Inactive</span>';
+    return `<tr><td>${esc(d.name)}</td><td>${esc(value)}</td><td>${esc(target)}</td>
+      <td>${money(d.min_purchase)} / ${Number(d.min_quantity)}</td>
       <td>${esc(d.start_date)} to ${esc(d.end_date || "no end")}</td>
-      <td>${d.times_used} / ${d.usage_limit ?? "unlimited"}</td>
-      <td><span class="dsc-badge ${d.is_active_now ? "dsc-on" : "dsc-off"}">${d.is_active_now ? "Active" : "Inactive"}</span></td>
-      ${isAdmin ? `<td><button class="dsc-btn del" data-id="${d.id}">Delete</button></td>` : ""}
-    </tr>`;
+      <td>${Number(d.times_used)} / ${d.usage_limit == null ? "unlimited" : Number(d.usage_limit)}</td>
+      <td>${state}</td>
+      <td><button class="btn danger small" data-del="${Number(d.id)}">Delete</button></td></tr>`;
   }).join("");
-  return `<table class="dsc-table"><thead><tr><th>Name</th><th>Value</th><th>Applies to</th>
-    <th>Min purchase / qty</th><th>Dates</th><th>Used</th><th>Status</th>${isAdmin ? "<th></th>" : ""}</tr></thead>
-    <tbody>${body}</tbody></table>`;
+  return `<table><thead><tr><th>Name</th><th>Value</th><th>Applies to</th><th>Min purchase / qty</th>
+    <th>Dates</th><th>Used</th><th>Status</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
-async function load() {
-  try { $("list").innerHTML = render(await call("/billing/discounts")); }
-  catch (err) { $("list").innerHTML = ""; say(err.message); }
+async function loadDiscounts() {
+  try { $("list").innerHTML = renderDiscounts(await api("/billing/discounts")); }
+  catch (err) { $("list").innerHTML = ""; sayError(msg, err); }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  $("d-start").value = new Date().toISOString().slice(0, 10);
-  if (!isAdmin) {
-    $("form-card").style.display = "none";
-    if (user) say("Only the admin can create or delete discounts. You can view them here.", "success");
-  }
+$("dsc-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearMsg(msg);
+  const type = $("d-type").value;
+  const value = Number($("d-value").value);
+  const start = $("d-start").value, end = $("d-end").value;
+  const targetId = parseInt($("d-target-id").value, 10);
+  if (!$("d-name").value.trim()) return say(msg, "Enter a name for the discount.", "error");
+  if (!(value > 0)) return say(msg, "The value must be greater than zero.", "error");
+  if (type === "percent" && value > 100) return say(msg, "A percentage cannot be more than 100.", "error");
+  if (end && end < start) return say(msg, "The end date cannot be before the start date.", "error");
+  if (!(targetId >= 1)) return say(msg, "Enter the ID of the product or subscription.", "error");
 
-  $("logout").addEventListener("click", (e) => {
-    e.preventDefault();
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    location.href = "/static/login.html";
-  });
+  const body = {
+    name: $("d-name").value.trim(), type, value,
+    min_purchase: Number($("d-minp").value || 0),
+    min_quantity: parseInt($("d-minq").value || "0", 10),
+    start_date: start,
+  };
+  if (end) body.end_date = end;
+  if ($("d-limit").value) body.usage_limit = parseInt($("d-limit").value, 10);
+  if ($("d-target").value === "product") body.product_id = targetId;
+  else body.subscription_id = targetId;
 
-  $("dsc-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    say("");
-    const value = Number($("d-value").value);
-    const type = $("d-type").value;
-    const start = $("d-start").value, end = $("d-end").value;
-    const targetId = parseInt($("d-target-id").value, 10);
-    if (!$("d-name").value.trim()) return say("Enter a name for the discount.");
-    if (!(value > 0)) return say("The value must be greater than zero.");
-    if (type === "percent" && value > 100) return say("A percentage cannot be more than 100.");
-    if (end && end < start) return say("The end date cannot be before the start date.");
-    if (!(targetId >= 1)) return say("Enter the ID of the product or subscription.");
-
-    const body = {
-      name: $("d-name").value.trim(), type, value,
-      min_purchase: Number($("d-minp").value || 0),
-      min_quantity: parseInt($("d-minq").value || "0", 10),
-      start_date: start,
-    };
-    if (end) body.end_date = end;
-    if ($("d-limit").value) body.usage_limit = parseInt($("d-limit").value, 10);
-    if ($("d-target").value === "product") body.product_id = targetId;
-    else body.subscription_id = targetId;
-
-    const button = e.target.querySelector("button");
-    button.disabled = true;
-    try {
-      await call("/billing/discounts", "POST", body);
-      say("Discount created.", "success");
-      e.target.reset();
-      $("d-start").value = new Date().toISOString().slice(0, 10);
-      load();
-    } catch (err) { say(err.message); }
-    finally { button.disabled = false; }
-  });
-
-  $("list").addEventListener("click", async (e) => {
-    const btn = e.target.closest("button[data-id]");
-    if (!btn || !window.confirm("Delete this discount?")) return;
-    say("");
-    try { await call("/billing/discounts/" + btn.dataset.id, "DELETE"); say("Discount deleted.", "success"); load(); }
-    catch (err) { say(err.message); }
-  });
-
-  load();
+  const button = e.target.querySelector("button");
+  button.disabled = true;
+  try {
+    await api("/billing/discounts", "POST", body);
+    say(msg, "Discount created.");
+    e.target.reset();
+    $("d-start").value = todayLocal();
+    loadDiscounts();
+  } catch (err) { sayError(msg, err); }
+  finally { button.disabled = false; }
 });
+
+$("list").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-del]");
+  if (!b || !confirm("Delete this discount?")) return;
+  clearMsg(msg);
+  try { await api("/billing/discounts/" + b.dataset.del, "DELETE"); say(msg, "Discount deleted."); loadDiscounts(); }
+  catch (err) { sayError(msg, err); }
+});
+
+$("d-start").value = todayLocal();
+loadTaxes();
+loadDiscounts();
 </script>
 </body>
 </html>

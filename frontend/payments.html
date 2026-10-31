@@ -1,9 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Payments</title>
-  <script>location.replace("/billing/ui#payments");</script>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payments | Brightloop</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/billing.css">
 </head>
-<body><p>Opening payments... <a href="/billing/ui#payments">Click here if nothing happens</a></p></body>
+<body>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">Payments</h1>
+  <p class="page-sub">Record money received and chase what is still owed.</p>
+  <div id="msg" class="msg"></div>
+
+  <div class="card" id="form-card">
+    <h2>Record a payment</h2>
+    <p class="hint">Payments can only be recorded on confirmed invoices, and never for more than the balance.</p>
+    <form id="pay-form" class="form-row">
+      <div><label for="invoice">Invoice ID</label><input id="invoice" type="number" min="1" step="1" required></div>
+      <div>
+        <label for="method">Method</label>
+        <select id="method">
+          <option value="cash">Cash</option><option value="card">Card</option>
+          <option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </div>
+      <div><label for="amount">Amount</label><input id="amount" type="number" min="0.01" step="0.01" required></div>
+      <div><label for="date">Date (optional)</label><input id="date" type="date"></div>
+      <div><label for="note">Note</label><input id="note" maxlength="500" placeholder="optional"></div>
+      <button class="btn" type="submit">Save payment</button>
+    </form>
+    <div id="info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Outstanding invoices</h2>
+    <div class="table-scroll" id="outstanding"></div>
+  </div>
+
+  <div class="card">
+    <h2>Overdue invoices</h2>
+    <p class="hint">Unpaid invoices past their due date. Chase these first.</p>
+    <div class="table-scroll" id="overdue"></div>
+  </div>
+</main>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script src="/static/js/billing-common.js"></script>
+<script>
+initLayout("payments.html");
+const user = getUser();
+if (user && user.role === "customer") window.location.href = "/static/portal.html";
+
+const $ = (id) => document.getElementById(id);
+const msg = $("msg");
+
+function renderUnpaid(rows) {
+  if (!rows.length) return '<p class="empty">Nothing here. Everything is paid up.</p>';
+  const body = rows.map((r) => `<tr>
+    <td>${esc(r.number)}</td><td>${esc(r.customer)}</td><td>${esc(r.due_date)}</td>
+    <td class="num">${money(r.total)}</td><td class="num">${money(r.paid)}</td>
+    <td class="num"><strong>${money(r.balance)}</strong></td>
+    <td class="${r.days_overdue > 0 ? "late" : ""}">${r.days_overdue > 0 ? Number(r.days_overdue) + " days late" : "On time"}</td>
+    <td><button class="btn small" data-pay="${Number(r.id)}" data-balance="${Number(r.balance)}">Pay</button></td></tr>`).join("");
+  return `<table><thead><tr><th>Number</th><th>Customer</th><th>Due</th><th class="num">Total</th>
+    <th class="num">Paid</th><th class="num">Balance</th><th>Status</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function loadLists() {
+  try {
+    $("outstanding").innerHTML = renderUnpaid(await api("/billing/outstanding?limit=50"));
+    $("overdue").innerHTML = renderUnpaid(await api("/billing/overdue?limit=50"));
+  } catch (err) { sayError(msg, err); }
+}
+
+// Shows the invoice's totals and payment history under the form.
+async function loadInfo() {
+  const id = parseInt($("invoice").value, 10);
+  if (!(id >= 1)) { $("info").innerHTML = ""; return; }
+  try {
+    const r = await api(`/billing/invoices/${id}/payments`);
+    const rows = r.payments.length
+      ? `<table><thead><tr><th>Date</th><th>Method</th><th class="num">Amount</th><th>Note</th></tr></thead><tbody>` +
+        r.payments.map((p) => `<tr><td>${esc(p.payment_date)}</td><td>${esc(p.method)}</td>
+          <td class="num">${money(p.amount)}</td><td>${esc(p.note || "")}</td></tr>`).join("") + "</tbody></table>"
+      : '<p class="hint">No payments recorded yet.</p>';
+    $("info").innerHTML = `<div class="detail-grid" style="margin-top:16px">
+      <div><div class="label">Invoice</div><div class="value">${esc(r.invoice.number)}</div></div>
+      <div><div class="label">Status</div><div class="value">${statusBadge(r.invoice.status)}</div></div>
+      <div><div class="label">Total</div><div class="value">${money(r.invoice.total)}</div></div>
+      <div><div class="label">Paid</div><div class="value">${money(r.paid)}</div></div>
+      <div><div class="label">Balance</div><div class="value">${money(r.balance)}</div></div></div>${rows}`;
+  } catch (err) { $("info").innerHTML = ""; sayError(msg, err); }
+}
+
+function startPayment(id, balance) {
+  $("invoice").value = id;
+  if (balance) $("amount").value = Number(balance).toFixed(2);
+  loadInfo();
+  $("form-card").scrollIntoView({ behavior: "smooth" });
+  $("amount").focus();
+}
+
+$("outstanding").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pay]");
+  if (b) startPayment(b.dataset.pay, b.dataset.balance);
+});
+$("overdue").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pay]");
+  if (b) startPayment(b.dataset.pay, b.dataset.balance);
+});
+$("invoice").addEventListener("change", loadInfo);
+
+$("pay-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearMsg(msg);
+  const id = parseInt($("invoice").value, 10);
+  const amount = Number($("amount").value);
+  if (!(id >= 1)) return say(msg, "Enter the invoice ID.", "error");
+  if (!(amount > 0)) return say(msg, "Enter an amount greater than zero.", "error");
+  if ($("date").value && $("date").value > todayLocal()) return say(msg, "The payment date cannot be in the future.", "error");
+  const body = { method: $("method").value, amount };
+  if ($("date").value) body.payment_date = $("date").value;
+  if ($("note").value.trim()) body.note = $("note").value.trim();
+  const button = e.target.querySelector("button");
+  button.disabled = true;
+  try {
+    const r = await api(`/billing/invoices/${id}/payments`, "POST", body);
+    say(msg, `Payment saved on ${r.invoice_number}. The invoice is ${r.invoice_status}; balance remaining ${money(r.balance_remaining)}.`);
+    $("amount").value = "";
+    $("note").value = "";
+    loadInfo();
+    loadLists();
+  } catch (err) { sayError(msg, err); }
+  finally { button.disabled = false; }
+});
+
+$("date").max = todayLocal();
+const fromLink = new URLSearchParams(location.search).get("invoice");
+if (fromLink) { $("invoice").value = parseInt(fromLink, 10) || ""; loadInfo(); }
+loadLists();
+</script>
+</body>
 </html>

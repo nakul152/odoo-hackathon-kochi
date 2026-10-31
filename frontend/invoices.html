@@ -1,9 +1,184 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Invoices</title>
-  <script>location.replace("/billing/ui#invoices");</script>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoices | Brightloop</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/billing.css">
 </head>
-<body><p>Opening invoices... <a href="/billing/ui#invoices">Click here if nothing happens</a></p></body>
+<body>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">Invoices</h1>
+  <p class="page-sub">Run billing day, review invoices and move them from draft to paid.</p>
+  <div id="msg" class="msg"></div>
+
+  <div class="card">
+    <h2>Billing day</h2>
+    <p class="hint">Creates an invoice for every active subscription that is due. Running it twice never bills anyone twice.</p>
+    <form id="run-form" class="form-row">
+      <div style="max-width:220px">
+        <label for="run-date">Billing date (optional)</label>
+        <input id="run-date" type="date">
+      </div>
+      <button class="btn" type="submit">Run billing</button>
+    </form>
+    <div id="run-result"></div>
+  </div>
+
+  <div class="card">
+    <div class="form-row">
+      <div style="max-width:220px">
+        <label for="status">Status</label>
+        <select id="status">
+          <option value="">All</option>
+          <option value="draft">Draft</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="paid">Paid</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-scroll" id="list"></div>
+    <div class="pager">
+      <button class="btn secondary small" id="prev" type="button">Previous</button>
+      <button class="btn secondary small" id="next" type="button">Next</button>
+      <span id="page-info"></span>
+    </div>
+  </div>
+
+  <div class="card" id="detail-card" style="display:none"><div id="detail"></div></div>
+</main>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script src="/static/js/billing-common.js"></script>
+<script>
+initLayout("invoices.html");
+const user = getUser();
+if (user && user.role === "customer") window.location.href = "/static/portal.html";
+
+const $ = (id) => document.getElementById(id);
+const msg = $("msg");
+const PAGE = 20;
+let offset = 0;
+
+function renderList(rows) {
+  if (!rows.length) return '<p class="empty">No invoices found.</p>';
+  const body = rows.map((r) => {
+    const id = Number(r.id);
+    let actions = "";
+    if (r.status === "draft") actions += `<button class="btn secondary small" data-action="confirm" data-id="${id}">Confirm</button>`;
+    if (r.status === "confirmed") actions += `<a class="btn small" href="/static/payments.html?invoice=${id}">Pay</a>`;
+    if (r.status === "draft" || r.status === "confirmed") actions += `<button class="btn danger small" data-action="cancel" data-id="${id}">Cancel</button>`;
+    return `<tr>
+      <td><button class="link-btn" data-detail="${id}">${esc(r.number)}</button></td>
+      <td>${esc(r.customer)}</td><td>${esc(r.issue_date)}</td><td>${esc(r.due_date)}</td>
+      <td class="num">${money(r.total)}</td><td>${statusBadge(r.status)}</td><td>${actions}</td></tr>`;
+  }).join("");
+  return `<table><thead><tr><th>Number</th><th>Customer</th><th>Issued</th><th>Due</th>
+    <th class="num">Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function loadInvoices() {
+  const q = new URLSearchParams({ limit: PAGE, offset });
+  if ($("status").value) q.set("status", $("status").value);
+  try {
+    const rows = await api("/billing/invoices?" + q);
+    $("list").innerHTML = renderList(rows);
+    $("page-info").textContent = rows.length ? `Showing ${offset + 1} to ${offset + rows.length}` : "";
+    $("prev").disabled = offset === 0;
+    $("next").disabled = rows.length < PAGE;
+  } catch (err) { $("list").innerHTML = ""; sayError(msg, err); }
+}
+
+function renderDetail(inv, pay) {
+  const lines = inv.lines.map((l) => `<tr><td>${esc(l.description)}</td>
+    <td class="num">${Number(l.quantity)}</td><td class="num">${money(l.unit_price)}</td>
+    <td class="num">${money(l.tax_amount)}</td><td class="num">${money(l.amount)}</td></tr>`).join("");
+  const discounts = inv.discounts.length
+    ? inv.discounts.map((d) => `${esc(d.name)} (-${money(d.amount)})`).join(", ") : "None";
+  const payments = pay.payments.length
+    ? `<table><thead><tr><th>Date</th><th>Method</th><th class="num">Amount</th><th>Note</th></tr></thead><tbody>` +
+      pay.payments.map((p) => `<tr><td>${esc(p.payment_date)}</td><td>${esc(p.method)}</td>
+        <td class="num">${money(p.amount)}</td><td>${esc(p.note || "")}</td></tr>`).join("") + "</tbody></table>"
+    : '<p class="hint">No payments recorded yet.</p>';
+  return `
+    <h2>Invoice ${esc(inv.number)} ${statusBadge(inv.status)}</h2>
+    <div class="detail-grid">
+      <div><div class="label">Customer</div><div class="value">${esc(inv.customer)}</div></div>
+      <div><div class="label">Subscription</div><div class="value">${esc(inv.subscription_number)}</div></div>
+      <div><div class="label">Billing period</div><div class="value">${esc(inv.billing_period_start)} to ${esc(inv.billing_period_end)}</div></div>
+      <div><div class="label">Due date</div><div class="value">${esc(inv.due_date)}</div></div>
+    </div>
+    <div class="table-scroll"><table><thead><tr><th>Item</th><th class="num">Qty</th>
+      <th class="num">Unit price</th><th class="num">Tax</th><th class="num">Amount</th></tr></thead>
+      <tbody>${lines}</tbody></table></div>
+    <p class="hint">Discounts applied: ${discounts}</p>
+    <div class="detail-grid">
+      <div><div class="label">Subtotal</div><div class="value">${money(inv.subtotal)}</div></div>
+      <div><div class="label">Discount</div><div class="value">-${money(inv.discount_total)}</div></div>
+      <div><div class="label">Tax</div><div class="value">${money(inv.tax_total)}</div></div>
+      <div><div class="label">Total</div><div class="value">${money(inv.total)}</div></div>
+      <div><div class="label">Paid</div><div class="value">${money(pay.paid)}</div></div>
+      <div><div class="label">Balance</div><div class="value">${money(pay.balance)}</div></div>
+    </div>
+    <h2>Payments</h2>${payments}`;
+}
+
+async function showDetail(id) {
+  try {
+    const [inv, pay] = await Promise.all([
+      api("/billing/invoices/" + id), api(`/billing/invoices/${id}/payments`)]);
+    $("detail").innerHTML = renderDetail(inv, pay);
+    $("detail-card").style.display = "block";
+    $("detail-card").scrollIntoView({ behavior: "smooth" });
+  } catch (err) { sayError(msg, err); }
+}
+
+async function changeStatus(id, action) {
+  if (action === "cancel" && !confirm("Cancel this invoice? This cannot be undone.")) return;
+  clearMsg(msg);
+  try {
+    const r = await api(`/billing/invoices/${id}/${action}`, "POST");
+    say(msg, `Invoice ${r.number} is now ${r.status}.`);
+    loadInvoices();
+  } catch (err) { sayError(msg, err); }
+}
+
+$("list").addEventListener("click", (e) => {
+  const detail = e.target.closest("[data-detail]");
+  if (detail) return showDetail(detail.dataset.detail);
+  const btn = e.target.closest("[data-action]");
+  if (btn) changeStatus(btn.dataset.id, btn.dataset.action);
+});
+$("status").addEventListener("change", () => { offset = 0; loadInvoices(); });
+$("prev").addEventListener("click", () => { offset = Math.max(0, offset - PAGE); loadInvoices(); });
+$("next").addEventListener("click", () => { offset += PAGE; loadInvoices(); });
+
+$("run-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearMsg(msg);
+  const button = e.target.querySelector("button");
+  button.disabled = true;
+  try {
+    const d = $("run-date").value;
+    const r = await api("/billing/run" + (d ? "?today=" + encodeURIComponent(d) : ""), "POST");
+    let html = `<p class="hint"><strong>${Number(r.invoices_created)}</strong> invoice(s) created,
+      <strong>${Number(r.already_billed)}</strong> already billed,
+      <strong>${Number(r.subscriptions_due)}</strong> subscription(s) were due.</p>`;
+    if (r.errors.length) {
+      html += '<p class="late">Problems:</p><ul style="margin-left:18px">' +
+        r.errors.map((x) => `<li>${esc(x.subscription)}: ${esc(x.error)}</li>`).join("") + "</ul>";
+    }
+    $("run-result").innerHTML = html;
+    offset = 0;
+    loadInvoices();
+  } catch (err) { sayError(msg, err); }
+  finally { button.disabled = false; }
+});
+
+loadInvoices();
+</script>
+</body>
 </html>

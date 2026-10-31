@@ -50,3 +50,4 @@ tr:hover td { background: #fafafe; }
 .userbar { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 14px; }
 .userbar .small { margin: 0; }
 body[data-role="customer"] .staff-only { display: none !important; }
+.navlink { color: #fff; font-size: 14px; text-decoration: underline; }

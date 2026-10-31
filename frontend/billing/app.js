@@ -5,10 +5,17 @@ let currentView = "invoices";
 // Escape text before putting it into the page, so nobody can inject HTML.
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const money = (n) => Number(n).toLocaleString("en-IN",
+const money = (n) => "₹" + Number(n || 0).toLocaleString("en-IN",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const $ = (id) => document.getElementById(id);
 const getToken = () => localStorage.getItem("token") || localStorage.getItem("access_token");
+
+// Today's date in the user's own time zone, as YYYY-MM-DD.
+function todayLocal() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
 
 function showMessage(text, kind = "error") {
   const box = $("message");
@@ -69,10 +76,20 @@ function showLoggedIn(user) {
   $("userbar").classList.remove("hidden");
   $("login-card").classList.add("hidden");
   $("app").classList.remove("hidden");
-  currentView = "invoices";
+
+  // Link back to the team dashboard (skipped if index.html has no such link).
+  const home = $("home-link");
+  if (home) home.href = user.role === "customer" ? "/static/portal.html" : "/static/dashboard.html";
+
+  const wanted = location.hash.replace("#", "");
+  currentView = (user.role !== "customer" && (wanted === "overdue" || wanted === "outstanding"))
+    ? wanted : "invoices";
   document.querySelectorAll(".tab").forEach((t) =>
-    t.classList.toggle("active", t.dataset.view === "invoices"));
+    t.classList.toggle("active", t.dataset.view === currentView));
   loadView();
+  if (wanted === "payments" && user.role !== "customer") {
+    $("payment-card").scrollIntoView({ behavior: "smooth" });
+  }
 }
 
 async function startApp() {
@@ -167,7 +184,7 @@ function startPayment(id, balance) {
 
 // ---------- events ----------
 document.addEventListener("DOMContentLoaded", () => {
-  $("pay-date").max = new Date().toISOString().slice(0, 10);
+  $("pay-date").max = todayLocal();
 
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -179,6 +196,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                password: $("login-password").value }),
       });
       localStorage.setItem("token", r.access_token);
+      localStorage.setItem("user", JSON.stringify(r.user));   // same as the team's login page
       $("login-password").value = "";
       startApp();
     } catch (err) {
@@ -189,6 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("logout").addEventListener("click", () => {
     localStorage.removeItem("token");
     localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
     showMessage("");
     showLoggedOut();
   });
