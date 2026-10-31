@@ -4,15 +4,131 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dashboard</title>
   <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    .filters > div { flex: 1; min-width: 150px; }
+    .filters label { margin-top: 0; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+    .bar-row .m { width: 70px; color: var(--muted); }
+    .bar { height: 14px; background: var(--primary); border-radius: 4px; min-width: 2px; }
+    .pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 14px; font-size: 14px; }
+    .num { text-align: right; }
+  </style>
 </head>
 <body>
 <div id="sidebar"></div>
 <main class="main">
   <h1 class="page-title">Dashboard</h1>
   <p class="page-sub">Active subscriptions, revenue, payments and overdue invoices</p>
-  <div class="card">Dashboard coming soon.</div>
+
+  <div class="grid">
+    <div class="card stat"><div class="label">Active subscriptions</div><div class="value" id="s-active">-</div></div>
+    <div class="card stat"><div class="label">Revenue collected</div><div class="value" id="s-revenue">-</div></div>
+    <div class="card stat"><div class="label">Outstanding</div><div class="value" id="s-owed">-</div><div class="label" id="s-owed-n"></div></div>
+    <div class="card stat"><div class="label">Overdue</div><div class="value" id="s-overdue" style="color:var(--danger)">-</div><div class="label" id="s-overdue-n"></div></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">Revenue by month (last 12 months)</h3>
+    <div id="bars"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">Invoices</h3>
+    <div class="filters">
+      <div><label for="f-status">Show</label>
+        <select id="f-status">
+          <option value="all">All invoices</option>
+          <option value="paid">Paid</option>
+          <option value="outstanding">Outstanding</option>
+          <option value="overdue">Overdue</option>
+          <option value="draft">Draft</option>
+        </select></div>
+      <div><label for="f-search">Search</label><input id="f-search" placeholder="Customer or invoice no."></div>
+      <div><label for="f-from">Issued from</label><input id="f-from" type="date"></div>
+      <div><label for="f-to">Issued to</label><input id="f-to" type="date"></div>
+      <div><button class="btn" id="apply">Apply</button></div>
+    </div>
+    <div id="msg" class="msg"></div>
+    <table style="margin-top:16px">
+      <thead><tr><th>Invoice</th><th>Customer</th><th>Issued</th><th>Due</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="pager">
+      <button class="btn secondary small" id="prev">Previous</button>
+      <span id="page-info"></span>
+      <button class="btn secondary small" id="next">Next</button>
+    </div>
+  </div>
 </main>
 <script src="/static/js/api.js"></script>
 <script src="/static/js/layout.js"></script>
-<script>initLayout("dashboard.html");</script>
+<script>
+initLayout("dashboard.html");
+const me = getUser();
+if (me && me.role === "customer") { window.location.href = "/static/subscriptions.html"; }
+
+const money = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const $ = id => document.getElementById(id);
+const PAGE_SIZE = 20;
+let page = 1, totalPages = 1;
+
+function dateQuery() {
+  const p = new URLSearchParams();
+  if ($("f-from").value) p.set("date_from", $("f-from").value);
+  if ($("f-to").value) p.set("date_to", $("f-to").value);
+  return p;
+}
+
+async function loadSummary() {
+  const s = await api("/dashboard/summary?" + dateQuery());
+  $("s-active").textContent = s.active_subscriptions;
+  $("s-revenue").textContent = money(s.revenue_collected);
+  $("s-owed").textContent = money(s.outstanding_amount);
+  $("s-owed-n").textContent = s.outstanding_invoices + " invoices";
+  $("s-overdue").textContent = money(s.overdue_amount);
+  $("s-overdue-n").textContent = s.overdue_invoices + " invoices";
+
+  const max = Math.max(1, ...s.revenue_by_month.map(m => Number(m.total)));
+  $("bars").innerHTML = s.revenue_by_month.length
+    ? s.revenue_by_month.map(m => `
+        <div class="bar-row"><span class="m">${esc(m.month)}</span>
+          <div class="bar" style="width:${(Number(m.total) / max) * 60}%"></div>
+          <span>${money(m.total)}</span></div>`).join("")
+    : "<p class='page-sub'>No payments yet</p>";
+}
+
+async function loadInvoices() {
+  const p = dateQuery();
+  p.set("status", $("f-status").value);
+  p.set("search", $("f-search").value);
+  p.set("page", page);
+  p.set("page_size", PAGE_SIZE);
+  const data = await api("/dashboard/invoices?" + p);
+  totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+  $("page-info").textContent = `Page ${data.page} of ${totalPages} (${data.total} invoices)`;
+  $("prev").disabled = page <= 1;
+  $("next").disabled = page >= totalPages;
+  $("rows").innerHTML = data.items.length ? data.items.map(r => `
+    <tr>
+      <td>${esc(r.number)}</td><td>${esc(r.customer)}</td>
+      <td>${esc(r.issue_date)}</td><td>${esc(r.due_date)}</td>
+      <td class="num">${money(r.total)}</td><td class="num">${money(r.paid)}</td>
+      <td class="num">${money(r.balance)}</td>
+      <td><span class="badge ${r.overdue ? "overdue" : esc(r.status)}">${r.overdue ? "overdue" : esc(r.status)}</span></td>
+    </tr>`).join("") : "<tr><td colspan='8'>No invoices match these filters</td></tr>";
+}
+
+async function refresh() {
+  try {
+    $("msg").className = "msg";
+    await Promise.all([loadSummary(), loadInvoices()]);
+  } catch (err) { showMessage($("msg"), err.messages, "error"); }
+}
+
+$("apply").addEventListener("click", () => { page = 1; refresh(); });
+$("prev").addEventListener("click", () => { if (page > 1) { page--; loadInvoices(); } });
+$("next").addEventListener("click", () => { if (page < totalPages) { page++; loadInvoices(); } });
+refresh();
+</script>
 </body></html>

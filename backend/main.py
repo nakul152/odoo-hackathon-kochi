@@ -8,6 +8,7 @@ from backend.billing.router import router as billing_router
 from backend.password_reset import router as reset_router
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from backend.dashboard import router as dashboard_router
 
 app = FastAPI(title="Subscription Management System")
 app.include_router(auth_router)
@@ -15,7 +16,7 @@ app.include_router(reset_router)
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 app.include_router(products_router)
 app.include_router(billing_router)     
-
+app.include_router(dashboard_router)
 
 @app.exception_handler(RequestValidationError)
 async def friendly_validation_errors(request: Request, exc: RequestValidationError):
