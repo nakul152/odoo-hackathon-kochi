@@ -10,6 +10,7 @@ from backend.dashboard import router as dashboard_router
 from backend.catalog.routes import router as catalog_router
 from backend.billing.router import router as billing_router
 from backend.portal import router as portal_router
+import time
 
 app = FastAPI(title="Subscription Management System")
 
@@ -22,6 +23,15 @@ app.include_router(portal_router)
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
+
+@app.middleware("http")
+async def log_request_time(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - start) * 1000
+    if request.url.path.startswith(("/dashboard", "/portal", "/auth")):
+        print(f"{request.method} {request.url.path} took {ms:.0f} ms")
+    return response
 
 @app.exception_handler(RequestValidationError)
 async def friendly_validation_errors(request: Request, exc: RequestValidationError):
