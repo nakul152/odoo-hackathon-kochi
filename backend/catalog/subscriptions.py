@@ -2,10 +2,11 @@ import uuid
 from datetime import date, timedelta
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from backend.database import get_connection
+from backend.security import require_roles
 
 router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
 
@@ -90,7 +91,7 @@ def load_subscription(conn, subscription_id: int):
 
 
 @router.post("", status_code=201)
-def create_subscription(data: SubscriptionIn):
+def create_subscription(data: SubscriptionIn, user=Depends(require_roles("admin", "staff"))):
     with get_connection() as conn:
         if conn.execute("SELECT 1 FROM customers WHERE id=%s", (data.customer_id,)).fetchone() is None:
             raise bad("Customer does not exist")
@@ -123,10 +124,11 @@ def create_subscription(data: SubscriptionIn):
         # temporary unique number, replaced by SUB-000X once we know the id
         sub = conn.execute(
             """INSERT INTO subscriptions
-               (number, customer_id, plan_id, template_id, start_date, expiry_date, payment_terms)
-               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-                        ("TMP-" + uuid.uuid4().hex[:20], data.customer_id, data.plan_id,
-             data.template_id, data.start_date, expiry, data.payment_terms),
+               (number, customer_id, plan_id, template_id, start_date, expiry_date,
+                payment_terms, created_by)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            ("TMP-" + uuid.uuid4().hex[:20], data.customer_id, data.plan_id,
+             data.template_id, data.start_date, expiry, data.payment_terms, user["id"]),
         ).fetchone()
         for b in built:
             conn.execute(

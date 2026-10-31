@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Products & Plans</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">Products & Plans</h1>
+  <p class="page-sub">What you sell and how it is billed</p>
+
+  <div class="card">
+    <h3>Add product</h3>
+    <form id="productForm">
+      <div class="grid">
+        <div><label for="p_name">Name</label><input id="p_name"></div>
+        <div><label for="p_type">Type</label><input id="p_type" placeholder="software"></div>
+        <div><label for="p_sales">Sales price</label><input id="p_sales" type="number" step="0.01"></div>
+        <div><label for="p_cost">Cost price</label><input id="p_cost" type="number" step="0.01" value="0"></div>
+      </div>
+      <button class="btn">Save product</button>
+    </form>
+    <div id="p_msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">Products</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Sales price</th><th></th></tr></thead>
+      <tbody id="productRows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Add plan</h3>
+    <form id="planForm">
+      <div class="grid">
+        <div><label for="pl_name">Name</label><input id="pl_name"></div>
+        <div><label for="pl_price">Price</label><input id="pl_price" type="number" step="0.01"></div>
+        <div><label for="pl_period">Billing period</label>
+          <select id="pl_period"><option>daily</option><option>weekly</option><option selected>monthly</option><option>yearly</option></select></div>
+        <div><label for="pl_start">Start date</label><input id="pl_start" type="date"></div>
+        <div><label for="pl_closable">Can be closed early</label>
+          <select id="pl_closable"><option value="false">No</option><option value="true">Yes</option></select></div>
+      </div>
+      <button class="btn">Save plan</button>
+    </form>
+    <div id="pl_msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">Plans</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Period</th><th>Starts</th><th>Closable</th></tr></thead>
+      <tbody id="planRows"></tbody>
+    </table>
+  </div>
+</main>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script>
+initLayout("products.html");
+const me = getUser();
+if (me && me.role === "customer") { window.location.href = "/static/subscriptions.html"; }
+
+const $ = id => document.getElementById(id);
+const money = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+async function loadProducts() {
+  try {
+    const rows = await api("/products");
+    $("productRows").innerHTML = rows.length ? rows.map(p => `
+      <tr><td>${p.id}</td><td>${esc(p.name)}</td><td>${esc(p.type)}</td>
+      <td>${money(p.sales_price)}</td>
+      <td><button class="btn secondary small" data-del="${p.id}">Deactivate</button></td></tr>`).join("")
+      : "<tr><td colspan='5'>No products yet</td></tr>";
+  } catch (err) { showMessage($("p_msg"), err.messages, "error"); }
+}
+
+async function loadPlans() {
+  try {
+    const rows = await api("/plans");
+    $("planRows").innerHTML = rows.length ? rows.map(p => `
+      <tr><td>${p.id}</td><td>${esc(p.name)}</td><td>${money(p.price)}</td>
+      <td>${esc(p.billing_period)}</td><td>${esc(p.start_date)}</td>
+      <td>${p.closable ? "Yes" : "No"}</td></tr>`).join("")
+      : "<tr><td colspan='6'>No plans yet</td></tr>";
+  } catch (err) { showMessage($("pl_msg"), err.messages, "error"); }
+}
+
+$("productRows").addEventListener("click", async e => {
+  const id = e.target.dataset.del; if (!id) return;
+  try { await api("/products/" + id, "DELETE"); loadProducts(); }
+  catch (err) { showMessage($("p_msg"), err.messages, "error"); }
+});
+
+$("productForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    await api("/products", "POST", {
+      name: $("p_name").value, type: $("p_type").value,
+      sales_price: parseFloat($("p_sales").value),
+      cost_price: parseFloat($("p_cost").value || 0)
+    });
+    showMessage($("p_msg"), "Product saved", "success");
+    e.target.reset(); loadProducts();
+  } catch (err) { showMessage($("p_msg"), err.messages, "error"); }
+});
+
+$("planForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    await api("/plans", "POST", {
+      name: $("pl_name").value, price: parseFloat($("pl_price").value),
+      billing_period: $("pl_period").value, start_date: $("pl_start").value,
+      closable: $("pl_closable").value === "true"
+    });
+    showMessage($("pl_msg"), "Plan saved", "success");
+    e.target.reset(); loadPlans();
+  } catch (err) { showMessage($("pl_msg"), err.messages, "error"); }
+});
+
+loadProducts(); loadPlans();
+</script>
+</body>
+</html>

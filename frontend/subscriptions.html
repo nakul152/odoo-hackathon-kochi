@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subscriptions</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">Subscriptions</h1>
+  <p class="page-sub">From quotation to active subscription</p>
+
+  <div class="card">
+    <h3>New subscription</h3>
+    <form id="subForm">
+      <div class="grid">
+        <div><label for="s_customer">Customer ID</label><input id="s_customer" type="number" min="1" value="1"></div>
+        <div><label for="s_plan">Plan</label><select id="s_plan"></select></div>
+        <div><label for="s_template">Quotation template</label><select id="s_template"></select></div>
+        <div><label for="s_start">Start date</label><input id="s_start" type="date"></div>
+      </div>
+      <button class="btn">Create</button>
+    </form>
+    <div id="s_msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">All subscriptions</h3>
+    <table>
+      <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Next billing</th><th>Move to</th></tr></thead>
+      <tbody id="subRows"></tbody>
+    </table>
+  </div>
+</main>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script>
+initLayout("subscriptions.html");
+const $ = id => document.getElementById(id);
+const NEXT = { draft: ["quotation", "closed"], quotation: ["confirmed", "draft", "closed"],
+               confirmed: ["active", "closed"], active: ["closed"], closed: [] };
+
+async function loadOptions() {
+  const [plans, templates] = await Promise.all([api("/plans"), api("/quotation-templates")]);
+  $("s_plan").innerHTML = plans.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  $("s_template").innerHTML = '<option value="">None</option>' +
+    templates.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
+}
+
+async function loadSubs() {
+  const rows = await api("/subscriptions");
+  $("subRows").innerHTML = rows.length ? rows.map(s => `
+    <tr><td>${esc(s.number)}</td><td>${esc(s.customer_name)}</td>
+    <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
+    <td>${esc(s.next_billing_date || "-")}</td>
+    <td>${NEXT[s.status].map(n =>
+      `<button class="btn secondary small" data-id="${s.id}" data-to="${n}">${n}</button> `).join("")}</td></tr>`).join("")
+    : "<tr><td colspan='5'>No subscriptions yet</td></tr>";
+}
+
+async function init() {
+  try { await loadOptions(); await loadSubs(); }
+  catch (err) { showMessage($("s_msg"), err.messages, "error"); }
+}
+
+$("subRows").addEventListener("click", async e => {
+  const { id, to } = e.target.dataset; if (!id) return;
+  try {
+    await api(`/subscriptions/${id}/status`, "PATCH", { status: to });
+    showMessage($("s_msg"), "Status changed to " + to, "success");
+  } catch (err) { showMessage($("s_msg"), err.messages, "error"); }
+  loadSubs();
+});
+
+$("subForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const t = $("s_template").value;
+    const s = await api("/subscriptions", "POST", {
+      customer_id: parseInt($("s_customer").value), plan_id: parseInt($("s_plan").value),
+      template_id: t ? parseInt(t) : null, start_date: $("s_start").value
+    });
+    showMessage($("s_msg"), "Created " + s.number, "success");
+    loadSubs();
+  } catch (err) { showMessage($("s_msg"), err.messages, "error"); }
+});
+
+init();
+</script>
+</body>
+</html>
