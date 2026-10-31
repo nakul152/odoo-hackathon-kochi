@@ -1,12 +1,15 @@
 from datetime import date
 from typing import Optional
 
+
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.database import get_connection
 from backend.billing import invoicing
+from backend.billing.payments import router as payments_router
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+router.include_router(payments_router) 
 
 VALID_STATUSES = ("draft", "confirmed", "paid", "cancelled")
 
