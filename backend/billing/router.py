@@ -7,9 +7,16 @@ from fastapi import APIRouter, HTTPException, Query
 from backend.database import get_connection
 from backend.billing import invoicing
 from backend.billing.payments import router as payments_router
+from backend.billing.admin import router as admin_router
+
+from pathlib import Path
+from fastapi.responses import FileResponse
+
+UI_DIR = Path(__file__).resolve().parents[2] / "frontend" / "billing"
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 router.include_router(payments_router) 
+router.include_router(admin_router)
 
 VALID_STATUSES = ("draft", "confirmed", "paid", "cancelled")
 
@@ -98,3 +105,17 @@ def confirm_invoice(invoice_id: int):
 @router.post("/invoices/{invoice_id}/cancel")
 def cancel_invoice(invoice_id: int):
     return change_status(invoice_id, ["draft", "confirmed"], "cancelled")
+
+@router.get("/ui", include_in_schema=False)
+def ui_page():
+    return FileResponse(UI_DIR / "index.html")
+
+
+@router.get("/ui/style.css", include_in_schema=False)
+def ui_css():
+    return FileResponse(UI_DIR / "style.css", media_type="text/css")
+
+
+@router.get("/ui/app.js", include_in_schema=False)
+def ui_js():
+    return FileResponse(UI_DIR / "app.js", media_type="application/javascript")
