@@ -1,11 +1,12 @@
 const MENU = [
   { href: "dashboard.html",     label: "Dashboard",          roles: ["admin", "staff"] },
   { href: "products.html",      label: "Products & Plans",   roles: ["admin", "staff"] },
-  { href: "subscriptions.html", label: "Subscriptions",      roles: ["admin", "staff", "customer"] },
-  { href: "invoices.html",      label: "Invoices",           roles: ["admin", "staff", "customer"] },
+  { href: "subscriptions.html", label: "Subscriptions",      roles: ["admin", "staff"] },
+  { href: "invoices.html",      label: "Invoices",           roles: ["admin", "staff"] },
   { href: "payments.html",      label: "Payments",           roles: ["admin", "staff"] },
   { href: "discounts.html",     label: "Discounts",          roles: ["admin"] },
   { href: "staff.html",         label: "Staff",              roles: ["admin"] },
+  { href: "portal.html",        label: "My Account",         roles: ["customer"] },
 ];
 
 function initLayout(activeHref) {

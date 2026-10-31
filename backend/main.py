@@ -9,6 +9,7 @@ from backend.password_reset import router as reset_router
 from backend.dashboard import router as dashboard_router
 from backend.catalog.routes import router as catalog_router
 from backend.billing.router import router as billing_router
+from backend.portal import router as portal_router
 
 app = FastAPI(title="Subscription Management System")
 
@@ -17,6 +18,7 @@ app.include_router(reset_router)
 app.include_router(catalog_router)
 app.include_router(billing_router)
 app.include_router(dashboard_router)
+app.include_router(portal_router)
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
