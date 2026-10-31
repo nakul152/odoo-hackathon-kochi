@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from backend.database import get_connection
 from backend.auth import router as auth_router
 from backend.catalog.routes import router as catalog_router
@@ -9,6 +11,7 @@ from backend.password_reset import router as reset_router
 
 app = FastAPI(title="Subscription Management System")
 
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 app.include_router(auth_router)
 app.include_router(reset_router)
 app.include_router(catalog_router)

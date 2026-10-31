@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staff</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">Staff</h1>
+  <p class="page-sub">Only the admin can add team members</p>
+
+  <div class="card">
+    <h3>Add a staff member</h3>
+    <form id="form">
+      <label for="name">Full name</label>
+      <input id="name" required>
+      <label for="email">Email</label>
+      <input id="email" type="email" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" required>
+      <div id="msg" class="msg"></div>
+      <button class="btn" style="margin-top:16px" type="submit">Add staff</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">Team</h3>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script>
+initLayout("staff.html");
+if (getUser() && getUser().role !== "admin") { window.location.href = "/static/dashboard.html"; }
+
+async function loadStaff() {
+  try {
+    const rows = await api("/auth/staff");
+    document.getElementById("rows").innerHTML = rows.map(r => `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.email)}</td>
+        <td><span class="badge">${esc(r.role)}</span></td>
+        <td><span class="badge ${r.is_active ? "active" : "closed"}">${r.is_active ? "Active" : "Disabled"}</span></td>
+      </tr>`).join("");
+  } catch (err) { showMessage(document.getElementById("msg"), err.messages, "error"); }
+}
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  try {
+    await api("/auth/staff", "POST", {
+      name: document.getElementById("name").value,
+      email: document.getElementById("email").value,
+      password: document.getElementById("password").value,
+    });
+    showMessage(msg, "Staff member added", "success");
+    e.target.reset();
+    loadStaff();
+  } catch (err) { showMessage(msg, err.messages, "error"); }
+});
+
+loadStaff();
+</script>
+</body></html>

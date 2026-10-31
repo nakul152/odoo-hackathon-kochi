@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="auth-wrap"><div class="auth-card">
+  <h1>Welcome back</h1>
+  <p class="sub">Log in to manage your subscriptions</p>
+  <form id="form">
+    <label for="email">Email</label>
+    <input id="email" type="email" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" required>
+    <div id="msg" class="msg"></div>
+    <button class="btn full" type="submit">Log in</button>
+  </form>
+  <div class="auth-links">
+    <a href="/static/forgot-password.html">Forgot password?</a>
+    <a href="/static/signup.html">Create account</a>
+  </div>
+</div></div>
+<script src="/static/js/api.js"></script>
+<script>
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  try {
+    const data = await api("/auth/login", "POST", {
+      email: document.getElementById("email").value,
+      password: document.getElementById("password").value,
+    });
+    localStorage.setItem("token", data.access_token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    window.location.href = data.user.role === "customer"
+      ? "/static/subscriptions.html" : "/static/dashboard.html";
+  } catch (err) { showMessage(msg, err.messages, "error"); }
+});
+</script>
+</body></html>
