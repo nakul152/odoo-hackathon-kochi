@@ -141,7 +141,7 @@ Key design decisions:
    ```
    DB_PASSWORD=postgres123
    JWT_SECRET=i-am-inevitable
-   ADMIN_EMAIL=admin@example.com
+   ADMIN_EMAIL=admin@test.com
    ADMIN_PASSWORD=Admin@12345
    ```
    Optional, for real reset emails: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. Without them the reset link is printed in the server terminal.
