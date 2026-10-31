@@ -1,20 +1,21 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from backend.database import get_connection
-from backend.auth import router as auth_router
-from backend.catalog.products import router as products_router
-from backend.billing.router import router as billing_router
-from backend.password_reset import router as reset_router
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from backend.database import get_connection
+from backend.auth import router as auth_router
+from backend.catalog.routes import router as catalog_router
+from backend.billing.router import router as billing_router
+from backend.password_reset import router as reset_router
 
 app = FastAPI(title="Subscription Management System")
+
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 app.include_router(auth_router)
 app.include_router(reset_router)
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
-app.include_router(products_router)
-app.include_router(billing_router)     
+app.include_router(catalog_router)
+app.include_router(billing_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -23,9 +24,9 @@ async def friendly_validation_errors(request: Request, exc: RequestValidationErr
     return JSONResponse(status_code=422, content={"detail": messages})
 
 
-@app.get("/", include_in_schema=False)
+@app.get("/")
 def home():
-    return RedirectResponse("/static/login.html")
+    return {"message": "Server is running"}
 
 
 @app.get("/health/db")
