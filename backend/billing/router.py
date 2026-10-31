@@ -7,9 +7,11 @@ from fastapi import APIRouter, HTTPException, Query
 from backend.database import get_connection
 from backend.billing import invoicing
 from backend.billing.payments import router as payments_router
+from backend.billing.admin import router as admin_router
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 router.include_router(payments_router) 
+router.include_router(admin_router)
 
 VALID_STATUSES = ("draft", "confirmed", "paid", "cancelled")
 
