@@ -22,10 +22,14 @@ One platform to run plans, subscriptions and recurring billing: products and pla
 - Only the admin can add staff members
 - Forgot password: one-time reset link (valid 30 minutes, stored hashed)
 
-**Catalogue and subscriptions** **[UPDATE]**
-- Products with sales price, cost price, notes and variants (for example Brand: Odoo adds 560)
-- Plans with billing period (daily, weekly, monthly, yearly), minimum quantity, availability dates, and per-plan rules for auto-close, early close, pause and renew
-- Quotation templates, and subscriptions moving Draft, Quotation, Confirmed, Active, Closed
+**Catalogue and subscriptions**
+- Products with sales price, cost price, notes and variants (for example Brand: Odoo adds 560); products are deactivated instead of deleted, so old subscriptions keep their history
+- Plans with billing period (daily, weekly, monthly, yearly), minimum quantity, start and end dates, and flags for auto-close, early close, pause and renew. The early-close flag is enforced; pause, renew and auto-close are stored and planned for a later version
+- Quotation templates (name, validity days, optional plan, product lines). A subscription created from a template copies its lines and sets its expiry to start date plus validity days
+- Subscriptions numbered SUB-0001, with each line priced as product price plus variant extra. Status flow Draft, Quotation, Confirmed, Active, Closed: only valid next steps are allowed, and invalid jumps return a clear error. An active subscription can be closed only if its plan allows it. Becoming active sets the next billing date
+- All catalogue endpoints require an admin or staff login, and the creating user is recorded
+- Pages: Products & Plans and Subscriptions (variants and quotation templates are managed through the API)
+- Catalogue API: `/products`, `/products/{id}/variants`, `/plans`, `/quotation-templates`, `/subscriptions`, `PATCH /subscriptions/{id}/status`
 
 **Billing** **[UPDATE]**
 - Invoices generated from subscriptions with customer details, lines, taxes and totals
@@ -52,7 +56,7 @@ backend/
   password_reset.py  forgot and reset password
   dashboard.py       finance summary and invoice list
   portal.py          customer-facing endpoints
-  catalog/           products, variants, plans, subscriptions   [UPDATE]
+  catalog/           products, variants, plans, quotation templates, subscriptions
   billing/           invoices, taxes, discounts, payments       [UPDATE]
   seed_admin.py      creates the first admin from .env
   seed_demo.py       optional demo data
@@ -121,7 +125,7 @@ Indexes cover the common filters, lists are paginated on the server, and totals 
 | Member | Area |
 |---|---|
 | [A M Nakul] (team leader) | Database design, accounts, roles, staff, password reset, dashboard, customer portal |
-| [Adwaith Narayan M] | Products, variants, plans, quotation templates, subscriptions **[UPDATE]** |
+| [Adwaith Narayan M] | Products, variants, plans, quotation templates, subscriptions |
 | [Sreerag C R] | Invoices, taxes, discounts, payments **[UPDATE]** |
 
 ## Possible next steps
@@ -129,3 +133,4 @@ Indexes cover the common filters, lists are paginated on the server, and totals 
 - Online payments and payment reminders by email
 - Scheduled automatic invoice generation
 - Audit log and CSV export of reports
+- Forms for variants and quotation templates, and behaviour for pause, renew and auto-close
