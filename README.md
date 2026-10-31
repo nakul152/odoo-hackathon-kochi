@@ -29,11 +29,42 @@ One platform to run plans, subscriptions and recurring billing: products and pla
 - Pages: Products & Plans and Subscriptions (variants and quotation templates are managed through the API)
 - Catalogue API: `/products`, `/products/{id}/variants`, `/plans`, `/quotation-templates`, `/subscriptions`, `PATCH /subscriptions/{id}/status`
 
-**Billing** **[UPDATE]**
-- Invoices generated from subscriptions with customer details, lines, taxes and totals
-- One invoice per subscription per billing period, enforced by a database unique constraint (nothing billed twice)
-- Tax rules set by the admin; admin-only discount rules (fixed or percentage, minimums, dates, usage limit) applied automatically
-- Invoice status flow Draft, Confirmed, Paid; payments recorded by method, amount, date and note
+**Billing day and invoices**
+- One click (or `POST /billing/run`) creates an invoice for every active subscription whose next billing date has arrived; nobody types an invoice by hand
+- Each invoice is built from its subscription: customer, product lines (with the chosen variant in the description), quantities, unit prices, taxes and totals, numbered INV-00001
+- The due date comes from the subscription's payment terms (for example "Net 15" gives 15 days)
+- **Nothing billed twice:** one invoice per subscription per billing period, enforced by a database unique constraint, so running billing twice creates nothing new
+- **Nothing skipped:** if a subscription was missed, billing catches up one period at a time (with a safety limit), then moves the next billing date forward by the plan's period
+- One failing subscription never stops the rest: each is billed in its own transaction and problems are listed in the result
+- Invoice status flow Draft, Confirmed, Paid, with Cancel allowed from Draft or Confirmed. An invoice becomes Paid automatically when its balance reaches zero
+- Invoice detail shows lines, tax, discounts applied, totals, payments and balance
+
+**Taxes and discounts**
+- The admin sets up taxes (name and percentage). Tax is calculated automatically on each invoice line, after that line's discount. Taxes are switched off, not deleted, because old invoices still use them
+- Only the admin can create discount rules: fixed amount or percentage, minimum purchase, minimum quantity, start and end dates, and a usage limit
+- A discount applies to one product or to a whole subscription. Once it applies, it appears on the next invoice by itself (as its own line in the invoice's discount list) and stops when it expires or runs out
+- A discount that was already used on an invoice cannot be deleted; the admin sets an end date instead
+
+**Payments**
+- Each payment records its method (cash, card, UPI, bank transfer or cheque), amount, date, a note and who recorded it, against the right invoice
+- Payments are accepted only on confirmed invoices, never for more than the outstanding balance, and never dated in the future. Part payments are supported
+- **Outstanding** and **Overdue** lists show total, paid, balance and days late, so overdue invoices can be chased before they turn into lost revenue
+- Customers see only their own invoices and payments (not drafts)
+
+**Billing pages and API**
+- Pages: Invoices (billing day, status filter, paging, confirm, cancel, invoice detail), Payments (record a payment, outstanding and overdue lists) and Discounts & Taxes (admin only)
+- A standalone billing screen is also available at `/billing/ui`
+- Forms check input before sending and show plain-language errors (for example "A percentage cannot be more than 100"); the server checks everything again
+
+| Endpoint | Who | Purpose |
+|---|---|---|
+| `POST /billing/run` | admin, staff | Billing day (optional `?today=YYYY-MM-DD` for testing) |
+| `GET /billing/invoices`, `GET /billing/invoices/{id}` | logged in (customers see only their own) | List with filters and paging, invoice detail |
+| `POST /billing/invoices/{id}/confirm`, `/cancel` | admin, staff | Change invoice status |
+| `POST /billing/invoices/{id}/payments`, `GET .../payments` | admin, staff record; logged in view | Record and list payments |
+| `GET /billing/outstanding`, `GET /billing/overdue` | admin, staff | Unpaid and late invoices |
+| `POST/GET/PUT/DELETE /billing/taxes` | admin writes; admin, staff read | Tax setup |
+| `POST/GET/PUT/DELETE /billing/discounts` | admin writes; admin, staff read | Discount rules |
 
 **Finance dashboard**
 - Active subscriptions, revenue collected, outstanding and overdue amounts, revenue by month
@@ -55,14 +86,25 @@ backend/
   dashboard.py       finance summary and invoice list
   portal.py          customer-facing endpoints
   catalog/           products, variants, plans, quotation templates, subscriptions
-  billing/           invoices, taxes, discounts, payments       [UPDATE]
+  billing/
+    invoicing.py     billing day: invoices, taxes and discounts
+    payments.py      payments, outstanding and overdue lists
+    admin.py         tax and discount setup (with validation)
+    access.py        customers see only their own invoices
+    router.py        billing endpoints and invoice status changes
   seed_admin.py      creates the first admin from .env
   seed_demo.py       optional demo data
 frontend/
   css/style.css      shared design
+  css/billing.css    extra styles for the billing pages
   js/api.js          API helper, friendly error messages
   js/layout.js       shared sidebar menu (role aware)
-  *.html             pages
+  js/billing-common.js  shared billing helpers (money format, messages)
+  invoices.html      invoices and billing day
+  payments.html      payments, outstanding and overdue
+  discounts.html     discounts and taxes (admin)
+  billing/           standalone billing screen at /billing/ui
+  *.html             other pages
 database/
   schema.sql         full database schema
 ```
@@ -79,9 +121,12 @@ database/
 - `invoices`, `invoice_lines`, `invoice_discounts`, `discounts`, `payments`
 
 Key design decisions:
-- `UNIQUE (subscription_id, billing_period_start)` on `invoices` prevents double billing even if generation runs twice
+- `UNIQUE (subscription_id, billing_period_start)` on `invoices` prevents double billing even if generation runs twice or two people click billing at the same moment (the insert uses `ON CONFLICT DO NOTHING`)
 - Status columns use `CHECK` constraints so invalid states cannot be stored
 - Payments are stored as rows; an invoice balance is `total - SUM(payments)`, so partial payments work
+- Money is calculated with exact decimals, never floating point, rounded half-up to 2 places
+- Discount usage is claimed with a guarded update (`times_used < usage_limit`), so a limit can never be exceeded; each applied discount is saved in `invoice_discounts`
+- A payment locks its invoice row while checking the balance, so two payments at the same moment cannot overpay an invoice
 - Indexes on subscription status, next billing date, invoice status and due date, payment date and invoice keep list and dashboard queries fast with thousands of rows
 
 ## Setup
@@ -109,6 +154,7 @@ Key design decisions:
 
 - Passwords hashed with bcrypt; never stored or logged in plain text
 - JWT tokens expire after 8 hours; every protected endpoint checks the role on the server
+- Billing endpoints are role-checked: only the admin sets up taxes and discounts; admin and staff run billing, change invoice status and record payments; a customer can only open their own invoices (another customer's invoice returns "not found")
 - All SQL uses parameterised queries
 - Reset tokens are random, stored as hashes, single use, and expire in 30 minutes; the forgot-password reply is identical whether or not the email exists
 - Secrets live in `.env`, which is git-ignored
@@ -116,7 +162,7 @@ Key design decisions:
 
 ## Performance
 
-Indexes cover the common filters, lists are paginated on the server, and totals are computed in SQL. Tested with 3000 subscriptions: **[UPDATE with measured load times]**.
+Indexes cover the common filters, lists are paginated on the server, and totals are computed in SQL. Billing lists (invoices, outstanding, overdue) are paginated and use the indexes on invoice status and due date. Tested with 3000 subscriptions: **[UPDATE with measured load times]**.
 
 ## Team
 
@@ -124,11 +170,12 @@ Indexes cover the common filters, lists are paginated on the server, and totals 
 |---|---|
 | [A M Nakul] (team leader) | Database design, accounts, roles, staff, password reset, dashboard, customer portal |
 | [Adwaith Narayan M] | Products, variants, plans, quotation templates, subscriptions |
-| [Sreerag C R] | Invoices, taxes, discounts, payments **[UPDATE]** |
+| [Sreerag C R] | Billing day and invoices, taxes, discounts, payments, billing pages |
 
 ## Possible next steps
 
 - Online payments and payment reminders by email
-- Scheduled automatic invoice generation
+- Scheduled automatic invoice generation (today billing day is started with one click)
+- Send and print invoices (email and PDF)
 - Audit log and CSV export of reports
 - Forms for variants and quotation templates, and behaviour for pause, renew and auto-close
