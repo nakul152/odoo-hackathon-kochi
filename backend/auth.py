@@ -99,3 +99,12 @@ def login(data: LoginRequest):
 @router.get("/me")
 def me(user=Depends(get_current_user)):
     return user
+
+@router.get("/staff")
+def list_staff(admin=Depends(require_roles("admin"))):
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, name, email, role, is_active, created_at "
+            "FROM users WHERE role IN ('admin', 'staff') ORDER BY id"
+        ).fetchall()
+    return rows

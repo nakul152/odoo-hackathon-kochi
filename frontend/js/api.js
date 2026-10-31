@@ -33,3 +33,9 @@ function showMessage(el, messages, type) {
   el.className = "msg " + type;
   el.innerHTML = "<ul>" + list.map(m => "<li>" + m + "</li>").join("") + "</ul>";
 }
+
+function esc(text) {
+  const d = document.createElement("div");
+  d.textContent = text == null ? "" : String(text);
+  return d.innerHTML;
+}
