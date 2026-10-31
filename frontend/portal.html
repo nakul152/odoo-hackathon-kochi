@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Account</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style> .num { text-align: right; } </style>
+</head>
+<body>
+<div id="sidebar"></div>
+<main class="main">
+  <h1 class="page-title">My Account</h1>
+  <p class="page-sub">Your subscriptions and invoices</p>
+  <div id="msg" class="msg"></div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">My subscriptions</h3>
+    <table>
+      <thead><tr><th>Number</th><th>Plan</th><th>Billing</th><th>Start</th><th>Expires</th><th>Next billing</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+      <tbody id="subs"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">My invoices</h3>
+    <table>
+      <thead><tr><th>Invoice</th><th>Subscription</th><th>Issued</th><th>Due</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th><th></th></tr></thead>
+      <tbody id="invs"></tbody>
+    </table>
+  </div>
+
+  <div class="card" id="detail" style="display:none"></div>
+</main>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/layout.js"></script>
+<script>
+initLayout("portal.html");
+const me = getUser();
+if (me && me.role !== "customer") { window.location.href = "/static/dashboard.html"; }
+
+const $ = id => document.getElementById(id);
+const money = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+async function loadSubs() {
+  const rows = await api("/portal/subscriptions");
+  $("subs").innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td>${esc(r.number)}</td><td>${esc(r.plan)}</td><td>${esc(r.billing_period)}</td>
+      <td>${esc(r.start_date)}</td><td>${esc(r.expiry_date || "-")}</td>
+      <td>${esc(r.next_billing_date || "-")}</td>
+      <td class="num">${money(r.amount)}</td>
+      <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
+      <td>${r.status === "active" && r.closable
+        ? `<button class="btn danger small" onclick="closeSub(${Number(r.id)})">Close</button>` : ""}</td>
+    </tr>`).join("") : "<tr><td colspan='9'>You have no subscriptions yet</td></tr>";
+}
+
+async function loadInvoices() {
+  const rows = await api("/portal/invoices");
+  $("invs").innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td>${esc(r.number)}</td><td>${esc(r.subscription)}</td>
+      <td>${esc(r.issue_date)}</td><td>${esc(r.due_date)}</td>
+      <td class="num">${money(r.total)}</td><td class="num">${money(r.balance)}</td>
+      <td><span class="badge ${r.overdue ? "overdue" : esc(r.status)}">${r.overdue ? "overdue" : esc(r.status)}</span></td>
+      <td><button class="btn secondary small" onclick="viewInvoice(${Number(r.id)})">View</button></td>
+    </tr>`).join("") : "<tr><td colspan='8'>No invoices yet</td></tr>";
+}
+
+async function viewInvoice(id) {
+  try {
+    const d = await api("/portal/invoices/" + id);
+    const i = d.invoice;
+    $("detail").style.display = "block";
+    $("detail").innerHTML = `
+      <h3>Invoice ${esc(i.number)}</h3>
+      <p class="page-sub">Period ${esc(i.billing_period_start)} to ${esc(i.billing_period_end)}, due ${esc(i.due_date)}</p>
+      <table>
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Tax</th><th class="num">Amount</th></tr></thead>
+        <tbody>${d.lines.map(l => `<tr><td>${esc(l.description)}</td><td class="num">${esc(l.quantity)}</td>
+          <td class="num">${money(l.unit_price)}</td><td class="num">${money(l.tax_amount)}</td>
+          <td class="num">${money(l.amount)}</td></tr>`).join("")}</tbody>
+      </table>
+      <p style="margin-top:12px" class="num">Subtotal ${money(i.subtotal)} | Discount ${money(i.discount_total)} | Tax ${money(i.tax_total)} | <b>Total ${money(i.total)}</b></p>
+      <h4 style="margin-top:16px">Payments</h4>
+      <table>
+        <thead><tr><th>Date</th><th>Method</th><th>Note</th><th class="num">Amount</th></tr></thead>
+        <tbody>${d.payments.length ? d.payments.map(p => `<tr><td>${esc(p.payment_date)}</td>
+          <td>${esc(p.method)}</td><td>${esc(p.note || "")}</td><td class="num">${money(p.amount)}</td></tr>`).join("")
+          : "<tr><td colspan='4'>No payments recorded yet</td></tr>"}</tbody>
+      </table>`;
+    $("detail").scrollIntoView({ behavior: "smooth" });
+  } catch (err) { showMessage($("msg"), err.messages, "error"); }
+}
+
+async function closeSub(id) {
+  if (!confirm("Close this subscription? This cannot be undone.")) return;
+  try {
+    await api(`/portal/subscriptions/${id}/close`, "POST");
+    showMessage($("msg"), "Subscription closed", "success");
+    loadSubs();
+  } catch (err) { showMessage($("msg"), err.messages, "error"); }
+}
+
+(async () => {
+  try { await Promise.all([loadSubs(), loadInvoices()]); }
+  catch (err) { showMessage($("msg"), err.messages, "error"); }
+})();
+</script>
+</body></html>
