@@ -99,3 +99,7 @@ def deactivate_product(product_id: int):
     if row is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deactivated"}
+
+from backend.catalog.variants import router as variants_router  # noqa: E402
+
+router.include_router(variants_router)
