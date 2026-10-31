@@ -3,8 +3,6 @@
 
 One platform to run plans, subscriptions and recurring billing: products and plans, quotations, subscriptions, automatic invoices, taxes, discounts, payments and a finance dashboard. Built for the **Odoo x Make-A-Ton 9.0 Kochi Hackathon 2026** (Brightloop Software problem statement).
 
-> Items marked **[UPDATE]** must be confirmed by the teammate who built that part before submission. Delete this line when done.
-
 ## Tech stack
 
 | Layer | Choice | Why |
